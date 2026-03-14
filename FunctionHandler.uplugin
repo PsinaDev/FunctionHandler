@@ -1,0 +1,34 @@
+{
+	"FileVersion": 3,
+	"Version": 1,
+	"VersionName": "1.0",
+	"FriendlyName": "FunctionHandler",
+	"CreatedBy": "PsinaDev",
+	"Modules": [
+		{
+			"Name": "FunctionHandler",
+			"Type": "Runtime",
+			"LoadingPhase": "Default"
+		},
+		{
+			"Name": "FunctionHandlerEditor",
+			"Type": "Editor",
+			"LoadingPhase": "Default"
+		},
+		{
+			"Name": "FunctionHandlerUncooked",
+			"Type": "UncookedOnly",
+			"LoadingPhase": "Default"
+		}
+	],
+	"Description": "",
+	"Category": "Runtime",
+	"CreatedByURL": "https://github.com/PsinaDev/",
+	"DocsURL": "https://github.com/PsinaDev/FunctionHandler",
+	"MarketplaceURL": "",
+	"SupportURL": "https://github.com/PsinaDev/FunctionHandler/issues",
+	"CanContainContent": false,
+	"IsBetaVersion": false,
+	"IsExperimentalVersion": false,
+	"Installed": false
+}

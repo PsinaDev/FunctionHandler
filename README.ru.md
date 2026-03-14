@@ -2,67 +2,65 @@
 
 [English](README.md) | **Русский**
 
-Сериализуемая data-driven система вызова функций для Unreal Engine 5. Настраивайте вызовы функций в редакторе с полным редактированием параметров — выполняйте их в рантайме через `ProcessEvent`.
+Сериализуемая data-driven система вызова функций для Unreal Engine 5. Настройте вызов и параметры в редакторе, выполните в рантайме через `ProcessEvent`.
 
 ![Hero Banner](screenshots/hero_banner.png)
 
 ## Обзор
 
-**FunctionHandler** оборачивает ссылку на `UFunction` вместе с сохранёнными значениями параметров в единую сериализуемую структуру (`FFunctionHandler`). Вместо хардкода вызовов или прокладывания десятков Blueprint-нод, вы определяете *что* вызывать и *с какими параметрами* как данные — и выполняете это когда и где угодно.
+**FunctionHandler** упаковывает ссылку на `UFunction` вместе со значениями параметров в одну сериализуемую структуру (`FFunctionHandler`). Вместо хардкода вызовов или цепочек Blueprint-нод вы описываете *что вызвать* и *с какими параметрами* как данные и выполняете когда угодно.
 
-**Ключевые возможности:**
-- Сериализуемая структура `FFunctionHandler` — работает с SaveGame, репликацией, data assets
-- Полноценные редакторы свойств в Details panel (пикеры GameplayTag, селекторы ассетов, пикеры цвета и т.д.)
+**Возможности:**
+- Сериализуемая структура `FFunctionHandler`. Работает с SaveGame, репликацией, data assets
+- Нативные редакторы свойств в Details panel (GameplayTag, ассеты, цвета и т.д.)
 - Кастомные K2-ноды: **Execute Handler**, **Make Handler**, **Set/Get Handler Parameters**
-- Типизированные return value / out-параметры через кастомные thunk'и Blueprint VM
-- C++ шаблонный API: `UFunctionHandlerLibrary::SetParameter<T>()`
-- Нулевые runtime-зависимости от editor-модулей
+- Типизированные return value и out-параметры через кастомные thunk'и Blueprint VM
+- Шаблонный C++ API: `UFunctionHandlerLibrary::SetParameter<T>()`
+- Runtime-модуль не зависит от editor-модулей
 
 ## Установка
 
-1. Склонируйте или скачайте в директорию `Plugins/` вашего проекта
-2. Перегенерируйте файлы проекта
-3. Включите плагин в `.uproject` или через Edit → Plugins
+Скачайте собранный плагин для UE 5.6 из [Releases](https://github.com/PsinaDev/FunctionHandler/releases/) или клонируйте/скачайте исходники. Поместите плагин в `Plugins/` вашего проекта, перегенерируйте файлы проекта и включите плагин в `.uproject` или через Edit > Plugins.
 
 **Модули:**
 
 | Модуль | Тип | Назначение |
 |--------|-----|------------|
-| `FunctionHandler` | Runtime | Основная структура, библиотека, VM thunk'и |
+| `FunctionHandler` | Runtime | Структура, библиотека, VM thunk'и |
 | `FunctionHandlerEditor` | Editor | Кастомизация свойств |
-| `FunctionHandlerUncooked` | UncookedOnly | K2-ноды, виджеты пинов графа |
+| `FunctionHandlerUncooked` | UncookedOnly | K2-ноды, виджеты пинов |
 
 ## Быстрый старт
 
-### Blueprint — Workflow с переменной
+### Blueprint: переменная
 
-1. Добавьте переменную `FFunctionHandler` в ваш Blueprint
+1. Создайте переменную типа `FFunctionHandler`
 2. В Details panel выберите **Target Class** и **Function**
-3. Настройте параметры через нативные редакторы свойств
-4. Используйте ноду **Execute Function by Handler** или **Execute Handler** в рантайме
+3. Настройте параметры нативными виджетами
+4. Вызовите через ноду **Execute Function by Handler** или **Execute Handler**
 
 ![Variable Workflow](screenshots/variable_workflow.png)
 
-### Blueprint — Workflow с Make Handler
+### Blueprint: Make Handler
 
 1. Поставьте ноду **Make Function Handler**
-2. Выберите Target Class в деталях ноды, выберите функцию из выпадающего списка
-3. Подключите типизированные входные параметры
-4. Соедините выход с **Execute Handler** для типизированных return values
+2. В деталях ноды укажите Target Class, выберите функцию из списка
+3. Подключите типизированные входы
+4. Выход соедините с **Execute Handler** для получения typed return values
 
 ![Make Handler Workflow](screenshots/make_handler_workflow.png)
 
-### Blueprint — Set / Get Handler Parameters
+### Blueprint: Set / Get Handler Parameters
 
-Используйте **Set Handler Parameters** для записи всех параметров существующего handler'а одной нодой, и **Get Handler Parameters** для обратного чтения — оба с полностью типизированными пинами.
+**Set Handler Parameters** записывает все параметры существующего handler'а за раз, **Get Handler Parameters** читает их обратно. Оба с полностью типизированными пинами.
 
 ![Batch Set Get](screenshots/batch_set_get.png)
 
-### Blueprint — Установка одного параметра
+### Blueprint: установка одного параметра
 
 1. Поставьте ноду **Set Handler Parameter**
-2. Подключите переменную Handler или ноду Make
-3. Выберите параметр из выпадающего списка — пин Value автоматически резолвится в нужный тип
+2. Подключите переменную Handler или выход Make
+3. Выберите параметр из списка. Пин Value автоматически подстроится под нужный тип
 
 ![Set Parameter Node](screenshots/set_parameter_node.png)
 
@@ -77,22 +75,22 @@ FFunctionHandler Handler;
 Handler.TargetClass = UAbilityComponent::StaticClass();
 Handler.FunctionName = TEXT("AddState");
 
-// Устанавливаем параметры (типобезопасно)
+// Задаём параметры (типобезопасно)
 FGameplayTag Tag = FGameplayTag::RequestGameplayTag(TEXT("State.Active"));
 UFunctionHandlerLibrary::SetParameter(Handler, TEXT("State"), Tag);
 
-// Выполняем на целевом объекте
+// Выполняем
 UFunctionHandlerLibrary::ExecuteFunctionByHandler(MyAbilityComponent, Handler);
 ```
 
 ## Details Panel
 
-Кастомизация свойств даёт полноценный опыт редактирования:
+Кастомизация свойств обеспечивает полноценное редактирование:
 
 - Пикер **Target Class** со стандартным селектором классов
-- Выпадающий список **Function** с поиском (фильтрует делегаты, внутренние функции)
-- **Редакторы параметров** — нативные UE-виджеты для каждого типа свойств
-- Скрытые параметры (return value, чистые out) автоматически отфильтрованы
+- Список **Function** с поиском (делегаты и служебные функции отфильтрованы)
+- **Редакторы параметров** через нативные UE-виджеты под каждый тип
+- Return value и чистые out-параметры скрыты автоматически
 
 ![Details Panel](screenshots/details_panel.png)
 
@@ -100,50 +98,50 @@ UFunctionHandlerLibrary::ExecuteFunctionByHandler(MyAbilityComponent, Handler);
 
 ### Execute Function Handler
 
-Выполняет handler на целевом объекте. Автоматически генерирует **типизированные выходные пины** для return values и out-параметров на основе сигнатуры функции подключённого handler'а.
+Вызывает handler на целевом объекте. Автоматически создаёт **типизированные выходные пины** под return value и out-параметры на основе сигнатуры функции.
 
-**Возможности:**
-- Резолвит сигнатуру функции из подключённой переменной (через CDO) или ноды Make
-- Типизированные пины return value и out-параметров
-- Реагирует на компиляцию Blueprint, изменение переменных и подключение пинов
-- Оранжевый оттенок для визуального отличия
+**Особенности:**
+- Резолвит сигнатуру из подключённой переменной (через CDO) или ноды Make
+- Типизированные пины для return value и out-параметров
+- Обновляется при компиляции Blueprint, изменении переменных и подключении пинов
+- Оранжевый тинт для визуального отличия
 
 ### Make Function Handler
 
-Создаёт структуру `FFunctionHandler` инлайново с типизированными входными пинами для каждого параметра функции.
+Конструирует `FFunctionHandler` инлайново с типизированными входными пинами под каждый параметр.
 
-**Возможности:**
+**Особенности:**
 - Target Class в деталях ноды
-- Выпадающий список функций с поиском прямо на ноде
-- Типизированные входные пины, сгенерированные из сигнатуры функции
-- Цепочка с Execute Handler для сквозного типизированного workflow
+- Список функций с поиском прямо на ноде
+- Типизированные входные пины из сигнатуры функции
+- Стыкуется с Execute Handler для сквозного typed workflow
 
 ### Set Handler Parameters
 
-Пакетная запись всех значений параметров в существующий handler через типизированные входные пины. Резолвит сигнатуру функции из подключённого handler'а — генерирует по одному входному пину на параметр.
+Пакетная запись всех параметров в существующий handler через типизированные входные пины. Сигнатура берётся из подключённого handler'а, по пину на каждый параметр.
 
-**Возможности:**
-- Типизированные входные пины для каждого параметра функции
-- Работает с handler'ами из переменных и из ноды Make
-- Записывает только параметры с подключением или непустым default-значением
+**Особенности:**
+- Типизированные входные пины под каждый параметр
+- Работает и с переменными, и с выходом Make
+- Пишутся только параметры с подключением или заданным default
 
 ### Get Handler Parameters
 
-Пакетное чтение всех сохранённых значений параметров из handler'а в типизированные выходные пины. Обратная операция к Set Handler Parameters.
+Пакетное чтение сохранённых параметров handler'а в типизированные выходные пины. Обратная операция к Set Handler Parameters.
 
-**Возможности:**
-- Типизированные выходные пины для каждого параметра функции
-- Вычисляет только те выходы, которые реально подключены
-- Полезно для инспекции или проброса состояния handler'а
+**Особенности:**
+- Типизированные выходные пины под каждый параметр
+- Вычисляются только реально подключённые выходы
+- Удобно для инспекции или проброса состояния handler'а
 
 ### Set Handler Parameter
 
-Устанавливает один параметр существующего handler'а через типобезопасный пин значения.
+Задаёт один параметр существующего handler'а через типобезопасный пин.
 
-**Возможности:**
-- Выпадающий список параметров на ноде (заполняется из функции подключённого handler'а)
-- Wildcard-пин Value резолвится в тип выбранного параметра
-- Работает как с handler'ами из переменных, так и из ноды Make
+**Особенности:**
+- Список параметров на ноде (подтягивается из функции подключённого handler'а)
+- Wildcard-пин Value подстраивается под тип выбранного параметра
+- Работает и с переменными, и с выходом Make
 
 ## Архитектура
 
@@ -151,42 +149,42 @@ UFunctionHandlerLibrary::ExecuteFunctionByHandler(MyAbilityComponent, Handler);
 FFunctionHandler (USTRUCT)
 ├── TargetClass: TSubclassOf<UObject>
 ├── FunctionName: FName
-├── ParameterValues: TMap<FName, FString>    ← сериализация через ExportText/ImportText
-├── ResolveFunction(UObject*) → UFunction*
-└── ResolveFunctionFromClass() → UFunction*
+├── ParameterValues: TMap<FName, FString>    // сериализация через ExportText/ImportText
+├── ResolveFunction(UObject*) -> UFunction*
+└── ResolveFunctionFromClass() -> UFunction*
 
 UFunctionHandlerLibrary (UCLASS)
-├── ExecuteFunctionByHandler()               ← простой fire-and-forget
-├── SetParameter<T>()                        ← C++ шаблонный setter
-├── InternalExecuteWithResult()              ← возвращает UFunctionCallResult*
-├── GetResultByName()                        ← CustomThunk, типизированный выход
-├── InternalSetParameter()                   ← CustomThunk, типизированный вход
-├── InternalGetParameter()                   ← CustomThunk, типизированный выход из TMap
-└── InternalMakeFunctionHandler()            ← конструирование структуры
+├── ExecuteFunctionByHandler()               // fire-and-forget вызов
+├── SetParameter<T>()                        // шаблонный setter для C++
+├── InternalExecuteWithResult()              // возвращает UFunctionCallResult*
+├── GetResultByName()                        // CustomThunk, типизированный выход
+├── InternalSetParameter()                   // CustomThunk, типизированный вход
+├── InternalGetParameter()                   // CustomThunk, чтение из TMap
+└── InternalMakeFunctionHandler()            // конструирование структуры
 
 UFunctionCallResult (UCLASS, Transient)
-├── ResultData: TSharedPtr<FStructOnScope>   ← владеет буфером параметров
+├── ResultData: TSharedPtr<FStructOnScope>   // владеет буфером параметров
 ├── CachedFunction: TWeakObjectPtr<UFunction>
-└── GetBuffer() → uint8*
+└── GetBuffer() -> uint8*
 ```
 
-### Как это работает
+### Как это устроено
 
-1. **Время редактирования:** Кастомизация свойств создаёт `FStructOnScope(UFunction*)`, импортирует сохранённые значения, отображает через `IStructureDetailsView`. Изменения экспортируются обратно в `TMap<FName, FString>`.
+1. **В редакторе:** кастомизация свойств создаёт `FStructOnScope(UFunction*)`, импортирует сохранённые значения и показывает их через `IStructureDetailsView`. При изменении значения экспортируются обратно в `TMap<FName, FString>`.
 
-2. **Время компиляции:** K2-ноды разворачиваются в цепочки вызовов `InternalMakeFunctionHandler` → `InternalSetParameter` → `InternalExecuteWithResult` → `GetResultByName`. CustomThunk'и используют `FProperty::ExportTextItem_Direct` / `ImportText_Direct` для типобезопасной конвертации.
+2. **При компиляции:** K2-ноды разворачиваются в цепочки `InternalMakeFunctionHandler` > `InternalSetParameter` > `InternalExecuteWithResult` > `GetResultByName`. CustomThunk'и используют `FProperty::ExportTextItem_Direct` / `ImportText_Direct` для типобезопасной конвертации.
 
-3. **Время выполнения:** `ExecuteFunctionByHandler` аллоцирует фрейм параметров (`FMemory::Malloc` + `InitializeStruct`), импортирует значения из TMap через `ImportText_Direct`, вызывает `ProcessEvent`, очищает память.
+3. **В рантайме:** `ExecuteFunctionByHandler` аллоцирует фрейм параметров (`FMemory::Malloc` + `InitializeStruct`), импортирует значения из TMap через `ImportText_Direct`, вызывает `ProcessEvent`, освобождает память.
 
-### Реализация CustomThunk
+### CustomThunk
 
-Плагин использует механизм `CustomThunk` Blueprint VM движка для типобезопасных wildcard-параметров:
+Плагин использует механизм `CustomThunk` Blueprint VM для типобезопасной работы с wildcard-параметрами:
 
-- **`GetResultByName`** — читает из буфера `UFunctionCallResult` через `FProperty::CopySingleValue`
-- **`InternalSetParameter`** — экспортирует типизированное значение через `FProperty::ExportTextItem_Direct` в TMap handler'а
-- **`InternalGetParameter`** — импортирует сохранённый текст из TMap handler'а обратно в типизированный выход через `FProperty::ImportText_Direct`
+- **`GetResultByName`** читает из буфера `UFunctionCallResult` через `FProperty::CopySingleValue`
+- **`InternalSetParameter`** экспортирует типизированное значение через `FProperty::ExportTextItem_Direct` в TMap handler'а
+- **`InternalGetParameter`** импортирует текст из TMap handler'а обратно в типизированный выход через `FProperty::ImportText_Direct`
 
-Все следуют паттерну движка `StepCompiledIn<FProperty>` с явным сбросом `MostRecentProperty` для предотвращения устаревшего состояния VM.
+Все работают по паттерну `StepCompiledIn<FProperty>` с явным сбросом `MostRecentProperty` для защиты от устаревшего состояния VM.
 
 ## Требования
 

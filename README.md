@@ -2,16 +2,16 @@
 
 **English** | [Русский](README.ru.md)
 
-A serializable, data-driven function call system for Unreal Engine 5. Configure function calls in the editor with full parameter editing — execute them at runtime via `ProcessEvent`.
+A serializable, data-driven function call system for Unreal Engine 5. Configure function calls in the editor with full parameter editing, execute them at runtime via `ProcessEvent`.
 
 ![Hero Banner](screenshots/hero_banner.png)
 
 ## Overview
 
-**FunctionHandler** wraps a `UFunction` reference with stored parameter values into a single, serializable struct (`FFunctionHandler`). Instead of hardcoding function calls or wiring dozens of Blueprint nodes, you define *what* to call and *with what parameters* as data — then execute it whenever and wherever you need.
+**FunctionHandler** wraps a `UFunction` reference with stored parameter values into a single, serializable struct (`FFunctionHandler`). Instead of hardcoding function calls or wiring dozens of Blueprint nodes, you define *what* to call and *with what parameters* as data, then execute it whenever and wherever you need.
 
 **Key features:**
-- Serializable `FFunctionHandler` struct — works with SaveGame, replication, data assets
+- Serializable `FFunctionHandler` struct. Works with SaveGame, replication, data assets
 - Full property editors in Details panel (GameplayTag pickers, asset selectors, color pickers, etc.)
 - Custom K2 Nodes: **Execute Handler**, **Make Handler**, **Set/Get Handler Parameters**
 - Typed return value / out parameter support via custom Blueprint VM thunks
@@ -20,9 +20,7 @@ A serializable, data-driven function call system for Unreal Engine 5. Configure 
 
 ## Installation
 
-1. Clone or download into your project's `Plugins/` directory
-2. Regenerate project files
-3. Enable the plugin in `.uproject` or via Edit → Plugins
+Download the pre-built plugin for UE 5.6 from [Releases](https://github.com/PsinaDev/FunctionHandler/releases/) or clone/download the source code. Place the plugin into your project's `Plugins/` directory, regenerate project files, and enable the plugin in `.uproject` or via Edit > Plugins.
 
 **Modules:**
 
@@ -34,7 +32,7 @@ A serializable, data-driven function call system for Unreal Engine 5. Configure 
 
 ## Quick Start
 
-### Blueprint — Variable Workflow
+### Blueprint: Variable Workflow
 
 1. Add a `FFunctionHandler` variable to your Blueprint
 2. In the Details panel, select **Target Class** and **Function**
@@ -43,7 +41,7 @@ A serializable, data-driven function call system for Unreal Engine 5. Configure 
 
 ![Variable Workflow](screenshots/variable_workflow.png)
 
-### Blueprint — Make Handler Workflow
+### Blueprint: Make Handler Workflow
 
 1. Place a **Make Function Handler** node
 2. Select Target Class in node details, pick a function from the dropdown
@@ -52,17 +50,17 @@ A serializable, data-driven function call system for Unreal Engine 5. Configure 
 
 ![Make Handler Workflow](screenshots/make_handler_workflow.png)
 
-### Blueprint — Set / Get Handler Parameters
+### Blueprint: Set / Get Handler Parameters
 
-Use **Set Handler Parameters** to batch-write all parameter values on an existing handler, and **Get Handler Parameters** to batch-read them back — both with fully typed pins.
+Use **Set Handler Parameters** to batch-write all parameter values on an existing handler, and **Get Handler Parameters** to batch-read them back. Both with fully typed pins.
 
 ![Batch Set Get](screenshots/batch_set_get.png)
 
-### Blueprint — Set Single Parameter
+### Blueprint: Set Single Parameter
 
 1. Place a **Set Handler Parameter** node
 2. Connect a Handler variable or Make node
-3. Select parameter from the dropdown — Value pin automatically resolves to the correct type
+3. Select parameter from the dropdown. Value pin automatically resolves to the correct type
 
 ![Set Parameter Node](screenshots/set_parameter_node.png)
 
@@ -91,7 +89,7 @@ The property customization provides a complete editing experience:
 
 - **Target Class** picker with standard class selector
 - **Function** dropdown with search (filters delegates, internal functions)
-- **Parameter editors** — native UE property widgets for every parameter type
+- **Parameter editors** with native UE property widgets for every parameter type
 - Hidden parameters (return value, pure out) are automatically filtered
 
 ![Details Panel](screenshots/details_panel.png)
@@ -120,7 +118,7 @@ Creates a `FFunctionHandler` struct inline with typed input pins for each functi
 
 ### Set Handler Parameters
 
-Batch-writes all parameter values on an existing handler with typed input pins. Resolves function signature from the connected handler — generates one input pin per parameter.
+Batch-writes all parameter values on an existing handler with typed input pins. Resolves function signature from the connected handler, generates one input pin per parameter.
 
 **Features:**
 - Typed input pins for every function parameter
@@ -151,40 +149,40 @@ Sets a single parameter on an existing handler with a type-safe value pin.
 FFunctionHandler (USTRUCT)
 ├── TargetClass: TSubclassOf<UObject>
 ├── FunctionName: FName
-├── ParameterValues: TMap<FName, FString>    ← ExportText/ImportText serialization
-├── ResolveFunction(UObject*) → UFunction*
-└── ResolveFunctionFromClass() → UFunction*
+├── ParameterValues: TMap<FName, FString>    // ExportText/ImportText serialization
+├── ResolveFunction(UObject*) -> UFunction*
+└── ResolveFunctionFromClass() -> UFunction*
 
 UFunctionHandlerLibrary (UCLASS)
-├── ExecuteFunctionByHandler()               ← Simple fire-and-forget
-├── SetParameter<T>()                        ← C++ template setter
-├── InternalExecuteWithResult()              ← Returns UFunctionCallResult*
-├── GetResultByName()                        ← CustomThunk, typed output
-├── InternalSetParameter()                   ← CustomThunk, typed input
-├── InternalGetParameter()                   ← CustomThunk, typed output from TMap
-└── InternalMakeFunctionHandler()            ← Struct construction
+├── ExecuteFunctionByHandler()               // Simple fire-and-forget
+├── SetParameter<T>()                        // C++ template setter
+├── InternalExecuteWithResult()              // Returns UFunctionCallResult*
+├── GetResultByName()                        // CustomThunk, typed output
+├── InternalSetParameter()                   // CustomThunk, typed input
+├── InternalGetParameter()                   // CustomThunk, typed output from TMap
+└── InternalMakeFunctionHandler()            // Struct construction
 
 UFunctionCallResult (UCLASS, Transient)
-├── ResultData: TSharedPtr<FStructOnScope>   ← Owns the parameter buffer
+├── ResultData: TSharedPtr<FStructOnScope>   // Owns the parameter buffer
 ├── CachedFunction: TWeakObjectPtr<UFunction>
-└── GetBuffer() → uint8*
+└── GetBuffer() -> uint8*
 ```
 
 ### How It Works
 
-1. **Editor time:** Property customization creates `FStructOnScope(UFunction*)`, imports stored values, displays via `IStructureDetailsView`. Changes export back to `TMap<FName, FString>`.
+1. **In the editor:** Property customization creates `FStructOnScope(UFunction*)`, imports stored values, and displays them via `IStructureDetailsView`. Changes export back to `TMap<FName, FString>`.
 
-2. **Compile time:** K2 Nodes expand into chains of `InternalMakeFunctionHandler` → `InternalSetParameter` → `InternalExecuteWithResult` → `GetResultByName` calls. CustomThunks use `FProperty::ExportTextItem_Direct` / `ImportText_Direct` for type-safe conversion.
+2. **At compile time:** K2 Nodes expand into chains of `InternalMakeFunctionHandler` > `InternalSetParameter` > `InternalExecuteWithResult` > `GetResultByName` calls. CustomThunks use `FProperty::ExportTextItem_Direct` / `ImportText_Direct` for type-safe conversion.
 
-3. **Runtime:** `ExecuteFunctionByHandler` allocates a parameter frame (`FMemory::Malloc` + `InitializeStruct`), imports values from TMap via `ImportText_Direct`, calls `ProcessEvent`, cleans up.
+3. **At runtime:** `ExecuteFunctionByHandler` allocates a parameter frame (`FMemory::Malloc` + `InitializeStruct`), imports values from TMap via `ImportText_Direct`, calls `ProcessEvent`, and cleans up.
 
 ### CustomThunk Implementation
 
 The plugin uses UE's Blueprint VM `CustomThunk` mechanism for type-safe wildcard parameters:
 
-- **`GetResultByName`** — Reads from `UFunctionCallResult` buffer using `FProperty::CopySingleValue`
-- **`InternalSetParameter`** — Exports typed value via `FProperty::ExportTextItem_Direct` into the handler's TMap
-- **`InternalGetParameter`** — Imports stored text from the handler's TMap back into a typed output via `FProperty::ImportText_Direct`
+- **`GetResultByName`** reads from `UFunctionCallResult` buffer using `FProperty::CopySingleValue`
+- **`InternalSetParameter`** exports typed value via `FProperty::ExportTextItem_Direct` into the handler's TMap
+- **`InternalGetParameter`** imports stored text from the handler's TMap back into a typed output via `FProperty::ImportText_Direct`
 
 All follow the engine's `StepCompiledIn<FProperty>` pattern with explicit `MostRecentProperty` reset to avoid stale VM state.
 

@@ -8,21 +8,14 @@
 #include "BlueprintNodeSpawner.h"
 #include "EdGraphSchema_K2.h"
 #include "K2Node_CallFunction.h"
-#include "K2Node_Variable.h"
-#include "K2Node_VariableGet.h"
-#include "K2Node_MakeFunctionHandler.h"
 #include "KismetCompiler.h"
-#include "Kismet2/BlueprintEditorUtils.h"
 
 #include "UObject/UnrealType.h"
 
 #define LOCTEXT_NAMESPACE "K2Node_SetFunctionHandlerParameter"
 
-const FName UK2Node_SetFunctionHandlerParameter::PN_Handler(TEXT("Handler"));
 const FName UK2Node_SetFunctionHandlerParameter::PN_ParameterName(TEXT("Parameter"));
 const FName UK2Node_SetFunctionHandlerParameter::PN_Value(TEXT("Value"));
-
-#pragma region UK2Node
 
 void UK2Node_SetFunctionHandlerParameter::AllocateDefaultPins()
 {
@@ -107,11 +100,6 @@ FText UK2Node_SetFunctionHandlerParameter::GetTooltipText() const
 	return LOCTEXT("Tooltip", "Set a typed parameter value on a Function Handler.");
 }
 
-FText UK2Node_SetFunctionHandlerParameter::GetMenuCategory() const
-{
-	return LOCTEXT("MenuCategory", "FunctionHandler");
-}
-
 void UK2Node_SetFunctionHandlerParameter::GetMenuActions(
 	FBlueprintActionDatabaseRegistrar& ActionRegistrar) const
 {
@@ -144,15 +132,6 @@ void UK2Node_SetFunctionHandlerParameter::ReallocatePinsDuringReconstruction(
 	RestoreSplitPins(OldPins);
 }
 
-void UK2Node_SetFunctionHandlerParameter::PinConnectionListChanged(UEdGraphPin* Pin)
-{
-	Super::PinConnectionListChanged(Pin);
-	if (Pin && Pin->PinName == PN_Handler)
-	{
-		RefreshFromHandler();
-	}
-}
-
 void UK2Node_SetFunctionHandlerParameter::PinDefaultValueChanged(UEdGraphPin* Pin)
 {
 	Super::PinDefaultValueChanged(Pin);
@@ -162,44 +141,11 @@ void UK2Node_SetFunctionHandlerParameter::PinDefaultValueChanged(UEdGraphPin* Pi
 	}
 }
 
-void UK2Node_SetFunctionHandlerParameter::PostReconstructNode()
-{
-	Super::PostReconstructNode();
-	BindBlueprintCompileDelegate();
-}
-
-void UK2Node_SetFunctionHandlerParameter::PostPasteNode()
-{
-	Super::PostPasteNode();
-	RefreshFromHandler();
-}
-
-void UK2Node_SetFunctionHandlerParameter::DestroyNode()
-{
-	UnbindBlueprintCompileDelegate();
-	Super::DestroyNode();
-}
-
-FSlateIcon UK2Node_SetFunctionHandlerParameter::GetIconAndTint(FLinearColor& OutColor) const
-{
-	OutColor = FLinearColor(0.8f, 0.3f, 0.05f);
-	return FSlateIcon(FAppStyle::GetAppStyleSetName(), "Kismet.AllClasses.FunctionIcon");
-}
-
-FLinearColor UK2Node_SetFunctionHandlerParameter::GetNodeTitleColor() const
-{
-	return FLinearColor(0.8f, 0.3f, 0.05f);
-}
-
-#pragma endregion UK2Node
-
-#pragma region Helpers
-
 void UK2Node_SetFunctionHandlerParameter::CollectParameterNames(TArray<TSharedPtr<FName>>& OutNames) const
 {
 	OutNames.Add(MakeShared<FName>(NAME_None));
 
-	UFunction* Function = TryResolveHandlerFunction();
+	UFunction* Function = const_cast<UK2Node_SetFunctionHandlerParameter*>(this)->TryResolveHandlerFunction();
 	if (!Function)
 	{
 		return;
@@ -218,60 +164,6 @@ void UK2Node_SetFunctionHandlerParameter::CollectParameterNames(TArray<TSharedPt
 		}
 		OutNames.Add(MakeShared<FName>(Prop->GetFName()));
 	}
-}
-
-UFunction* UK2Node_SetFunctionHandlerParameter::TryResolveHandlerFunction() const
-{
-	const UEdGraphPin* HandlerPin = FindPin(PN_Handler);
-	if (HandlerPin && HandlerPin->LinkedTo.Num() == 1)
-	{
-		const UEdGraphPin* SourcePin = HandlerPin->LinkedTo[0];
-		if (SourcePin)
-		{
-			const UK2Node_MakeFunctionHandler* MakeNode = Cast<UK2Node_MakeFunctionHandler>(SourcePin->GetOwningNode());
-			if (MakeNode)
-			{
-				if (UFunction* Func = MakeNode->GetTargetFunction())
-				{
-					CachedTargetClass = MakeNode->TargetClass;
-					CachedFunctionName = Func->GetFName();
-				}
-			}
-
-			const UK2Node_VariableGet* VarGetNode = Cast<UK2Node_VariableGet>(SourcePin->GetOwningNode());
-			if (VarGetNode)
-			{
-				const UBlueprint* BP = FBlueprintEditorUtils::FindBlueprintForNode(this);
-				UClass* GenClass = BP ? (BP->GeneratedClass ? BP->GeneratedClass : BP->SkeletonGeneratedClass) : nullptr;
-				if (GenClass)
-				{
-					const FStructProperty* StructProp = CastField<FStructProperty>(
-						GenClass->FindPropertyByName(VarGetNode->GetVarName()));
-
-					if (StructProp && StructProp->Struct == FFunctionHandler::StaticStruct())
-					{
-						const UObject* CDO = GenClass->GetDefaultObject(false);
-						if (CDO)
-						{
-							const FFunctionHandler* Handler = StructProp->ContainerPtrToValuePtr<FFunctionHandler>(CDO);
-							if (Handler && Handler->IsValid() && Handler->TargetClass)
-							{
-								CachedTargetClass = Handler->TargetClass;
-								CachedFunctionName = Handler->FunctionName;
-							}
-						}
-					}
-				}
-			}
-		}
-	}
-
-	if (CachedTargetClass && !CachedFunctionName.IsNone())
-	{
-		return CachedTargetClass->FindFunctionByName(CachedFunctionName);
-	}
-
-	return nullptr;
 }
 
 FName UK2Node_SetFunctionHandlerParameter::GetSelectedParameterName() const
@@ -319,49 +211,5 @@ void UK2Node_SetFunctionHandlerParameter::RefreshValuePinType()
 		}
 	}
 }
-
-void UK2Node_SetFunctionHandlerParameter::RefreshFromHandler()
-{
-	if (bIsRefreshing)
-	{
-		return;
-	}
-	bIsRefreshing = true;
-
-	CachedTargetClass = nullptr;
-	CachedFunctionName = NAME_None;
-	TryResolveHandlerFunction();
-	ReconstructNode();
-
-	bIsRefreshing = false;
-}
-
-void UK2Node_SetFunctionHandlerParameter::BindBlueprintCompileDelegate()
-{
-	UBlueprint* BP = FBlueprintEditorUtils::FindBlueprintForNode(this);
-	if (!BP || BoundBlueprint == BP)
-	{
-		return;
-	}
-	UnbindBlueprintCompileDelegate();
-	BP->OnCompiled().AddUObject(this, &UK2Node_SetFunctionHandlerParameter::OnBlueprintCompiled);
-	BoundBlueprint = BP;
-}
-
-void UK2Node_SetFunctionHandlerParameter::UnbindBlueprintCompileDelegate()
-{
-	if (UBlueprint* BP = BoundBlueprint.Get())
-	{
-		BP->OnCompiled().RemoveAll(this);
-		BoundBlueprint = nullptr;
-	}
-}
-
-void UK2Node_SetFunctionHandlerParameter::OnBlueprintCompiled(UBlueprint* Blueprint)
-{
-	RefreshFromHandler();
-}
-
-#pragma endregion Helpers
 
 #undef LOCTEXT_NAMESPACE

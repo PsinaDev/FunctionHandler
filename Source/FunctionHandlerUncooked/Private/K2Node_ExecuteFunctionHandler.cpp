@@ -8,21 +8,14 @@
 #include "BlueprintNodeSpawner.h"
 #include "EdGraphSchema_K2.h"
 #include "K2Node_CallFunction.h"
-#include "K2Node_Variable.h"
-#include "K2Node_VariableGet.h"
-#include "K2Node_MakeFunctionHandler.h"
 #include "KismetCompiler.h"
-#include "Kismet2/BlueprintEditorUtils.h"
 
 #include "UObject/UnrealType.h"
 
 #define LOCTEXT_NAMESPACE "K2Node_ExecuteFunctionHandler"
 
 const FName UK2Node_ExecuteFunctionHandler::PN_Target(TEXT("Target"));
-const FName UK2Node_ExecuteFunctionHandler::PN_Handler(TEXT("Handler"));
 const FName UK2Node_ExecuteFunctionHandler::PN_Success(TEXT("Success"));
-
-#pragma region UK2Node
 
 void UK2Node_ExecuteFunctionHandler::AllocateDefaultPins()
 {
@@ -119,7 +112,6 @@ void UK2Node_ExecuteFunctionHandler::ExpandNode(
 			GetterNode->SetFromFunction(GetResultFunc);
 			GetterNode->AllocateDefaultPins();
 
-			// Chain exec: previous → GetterNode → next.
 			LastExecOut->MakeLinkTo(GetterNode->FindPinChecked(UEdGraphSchema_K2::PN_Execute));
 			LastExecOut = GetterNode->FindPinChecked(UEdGraphSchema_K2::PN_Then);
 
@@ -138,7 +130,6 @@ void UK2Node_ExecuteFunctionHandler::ExpandNode(
 		}
 	}
 
-	// Wire final exec out to our Then pin.
 	CompilerContext.MovePinLinksToIntermediate(
 		*FindPinChecked(UEdGraphSchema_K2::PN_Then),
 		*LastExecOut);
@@ -152,7 +143,6 @@ FText UK2Node_ExecuteFunctionHandler::GetNodeTitle(ENodeTitleType::Type TitleTyp
 	{
 		return LOCTEXT("NodeTitle", "Execute Function Handler");
 	}
-
 	return FText::Format(
 		LOCTEXT("NodeTitleWithFunc", "Execute Handler: {0}"),
 		FText::FromName(CachedFunctionName));
@@ -161,11 +151,6 @@ FText UK2Node_ExecuteFunctionHandler::GetNodeTitle(ENodeTitleType::Type TitleTyp
 FText UK2Node_ExecuteFunctionHandler::GetTooltipText() const
 {
 	return LOCTEXT("Tooltip", "Execute a function on the target using stored parameters from the handler, with typed result outputs.");
-}
-
-FText UK2Node_ExecuteFunctionHandler::GetMenuCategory() const
-{
-	return LOCTEXT("MenuCategory", "FunctionHandler");
 }
 
 void UK2Node_ExecuteFunctionHandler::GetMenuActions(
@@ -186,54 +171,11 @@ void UK2Node_ExecuteFunctionHandler::ReallocatePinsDuringReconstruction(
 	RestoreSplitPins(OldPins);
 }
 
-void UK2Node_ExecuteFunctionHandler::PinConnectionListChanged(UEdGraphPin* Pin)
-{
-	Super::PinConnectionListChanged(Pin);
-
-	if (Pin && Pin->PinName == PN_Handler)
-	{
-		RefreshFromHandler();
-	}
-}
-
 void UK2Node_ExecuteFunctionHandler::PinDefaultValueChanged(UEdGraphPin* Pin)
 {
 	Super::PinDefaultValueChanged(Pin);
 	RefreshFromHandler();
 }
-
-void UK2Node_ExecuteFunctionHandler::PostReconstructNode()
-{
-	Super::PostReconstructNode();
-	BindBlueprintCompileDelegate();
-}
-
-void UK2Node_ExecuteFunctionHandler::PostPasteNode()
-{
-	Super::PostPasteNode();
-	RefreshFromHandler();
-}
-
-void UK2Node_ExecuteFunctionHandler::DestroyNode()
-{
-	UnbindBlueprintCompileDelegate();
-	Super::DestroyNode();
-}
-
-FSlateIcon UK2Node_ExecuteFunctionHandler::GetIconAndTint(FLinearColor& OutColor) const
-{
-	OutColor = FLinearColor(0.8f, 0.3f, 0.05f);
-	return FSlateIcon(FAppStyle::GetAppStyleSetName(), "Kismet.AllClasses.FunctionIcon");
-}
-
-FLinearColor UK2Node_ExecuteFunctionHandler::GetNodeTitleColor() const
-{
-	return FLinearColor(0.8f, 0.3f, 0.05f);
-}
-
-#pragma endregion UK2Node
-
-#pragma region Helpers
 
 void UK2Node_ExecuteFunctionHandler::CreateOutputPinsForFunction(UFunction* Function)
 {
@@ -265,145 +207,5 @@ void UK2Node_ExecuteFunctionHandler::CreateOutputPinsForFunction(UFunction* Func
 		CreatePin(EGPD_Output, PinType, PinName);
 	}
 }
-
-UFunction* UK2Node_ExecuteFunctionHandler::TryResolveHandlerFunction()
-{
-	// Try to read from linked Handler variable.
-	const UEdGraphPin* HandlerPin = FindPin(PN_Handler);
-	if (HandlerPin && HandlerPin->LinkedTo.Num() == 1)
-	{
-		const UEdGraphPin* SourcePin = HandlerPin->LinkedTo[0];
-		if (SourcePin)
-		{
-			// Resolve from MakeFunctionHandler node.
-			const UK2Node_MakeFunctionHandler* MakeNode = Cast<UK2Node_MakeFunctionHandler>(SourcePin->GetOwningNode());
-			if (MakeNode)
-			{
-				if (UFunction* Func = MakeNode->GetTargetFunction())
-				{
-					CachedTargetClass = MakeNode->TargetClass;
-					CachedFunctionName = Func->GetFName();
-				}
-			}
-
-			// Resolve from variable getter via CDO.
-			const UK2Node_VariableGet* VarGetNode = Cast<UK2Node_VariableGet>(SourcePin->GetOwningNode());
-			if (VarGetNode)
-			{
-				const UBlueprint* BP = FBlueprintEditorUtils::FindBlueprintForNode(this);
-				UClass* GenClass = BP ? (BP->GeneratedClass ? BP->GeneratedClass : BP->SkeletonGeneratedClass) : nullptr;
-				if (GenClass)
-				{
-					const FStructProperty* StructProp = CastField<FStructProperty>(
-						GenClass->FindPropertyByName(VarGetNode->GetVarName()));
-
-					if (StructProp && StructProp->Struct == FFunctionHandler::StaticStruct())
-					{
-						const UObject* CDO = GenClass->GetDefaultObject(false);
-						if (CDO)
-						{
-							const FFunctionHandler* Handler = StructProp->ContainerPtrToValuePtr<FFunctionHandler>(CDO);
-							if (Handler && Handler->IsValid() && Handler->TargetClass)
-							{
-								CachedTargetClass = Handler->TargetClass;
-								CachedFunctionName = Handler->FunctionName;
-							}
-						}
-					}
-				}
-			}
-
-			// Fallback: resolve from intermediate CallFunction node wrapping InternalMakeFunctionHandler.
-			// This handles the case where MakeFunctionHandler was already expanded before us.
-			if (CachedFunctionName.IsNone())
-			{
-				const UK2Node_CallFunction* CallNode = Cast<UK2Node_CallFunction>(SourcePin->GetOwningNode());
-				if (CallNode)
-				{
-					static const FName InternalMakeName = GET_FUNCTION_NAME_CHECKED(UFunctionHandlerLibrary, InternalMakeFunctionHandler);
-					if (CallNode->GetFunctionName() == InternalMakeName)
-					{
-						const UEdGraphPin* ClassPin = CallNode->FindPin(TEXT("TargetClass"));
-						const UEdGraphPin* FuncNamePin = CallNode->FindPin(TEXT("FunctionName"));
-						if (ClassPin && FuncNamePin)
-						{
-							UClass* ResolvedClass = Cast<UClass>(ClassPin->DefaultObject);
-							FName ResolvedFuncName = FName(*FuncNamePin->DefaultValue);
-							if (ResolvedClass && !ResolvedFuncName.IsNone())
-							{
-								CachedTargetClass = ResolvedClass;
-								CachedFunctionName = ResolvedFuncName;
-							}
-						}
-					}
-				}
-			}
-		}
-	}
-
-	// Fallback to cached values (during reconstruction when pins aren't linked yet).
-	if (CachedTargetClass && !CachedFunctionName.IsNone())
-	{
-		return CachedTargetClass->FindFunctionByName(CachedFunctionName);
-	}
-
-	return nullptr;
-}
-
-void UK2Node_ExecuteFunctionHandler::RefreshFromHandler()
-{
-	if (bIsRefreshing)
-	{
-		return;
-	}
-
-	bIsRefreshing = true;
-
-	const FName OldFunctionName = CachedFunctionName;
-	const TSubclassOf<UObject> OldTargetClass = CachedTargetClass;
-
-	// Clear cache to force a fresh read.
-	CachedTargetClass = nullptr;
-	CachedFunctionName = NAME_None;
-
-	TryResolveHandlerFunction();
-
-	if (CachedFunctionName != OldFunctionName || CachedTargetClass != OldTargetClass)
-	{
-		ReconstructNode();
-	}
-
-	bIsRefreshing = false;
-}
-
-void UK2Node_ExecuteFunctionHandler::BindBlueprintCompileDelegate()
-{
-	UBlueprint* BP = FBlueprintEditorUtils::FindBlueprintForNode(this);
-	if (!BP || BoundBlueprint == BP)
-	{
-		return;
-	}
-
-	UnbindBlueprintCompileDelegate();
-
-	BP->OnCompiled().AddUObject(this, &UK2Node_ExecuteFunctionHandler::OnBlueprintCompiled);
-	BoundBlueprint = BP;
-}
-
-void UK2Node_ExecuteFunctionHandler::UnbindBlueprintCompileDelegate()
-{
-	if (UBlueprint* BP = BoundBlueprint.Get())
-	{
-		BP->OnCompiled().RemoveAll(this);
-		BoundBlueprint = nullptr;
-	}
-}
-
-void UK2Node_ExecuteFunctionHandler::OnBlueprintCompiled(UBlueprint* Blueprint)
-{
-	RefreshFromHandler();
-}
-
-#pragma endregion Helpers
 
 #undef LOCTEXT_NAMESPACE
